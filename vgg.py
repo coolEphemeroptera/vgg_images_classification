@@ -1,5 +1,6 @@
 from keras.layers import Input, Conv2D, BatchNormalization, MaxPooling2D, Flatten, Dense, Dropout, Reshape
 from keras.models import Model
+from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
 import utils
 
@@ -122,7 +123,8 @@ if __name__ == "__main__":
     # 编译模型
     model = Model(inputs=inputs, outputs=vgg_11(inputs, N_CLASSES))
     model.summary()
-    model.compile(optimizer='adam',loss='categorical_crossentropy',metrics=['accuracy'])
+    opt = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, decay=0.001, epsilon=10e-8)
+    model.compile(optimizer=opt,loss='categorical_crossentropy',metrics=['accuracy'])
 
     # 训练
     n_batchs = len(train_lst)//BATCH_SIZE
