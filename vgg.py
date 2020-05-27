@@ -1,5 +1,6 @@
 from keras.layers import Input, Conv2D, BatchNormalization, MaxPooling2D, Flatten, Dense, Dropout, Reshape
 from keras.models import Model
+from keras.utils import multi_gpu_model
 import utils
 
 # base 模块
@@ -60,11 +61,47 @@ def vgg_16(inputs, n_classes):
     return x
 
 
+# vgg_11
+def vgg_11(inputs, n_classes):
+    # cnn-1
+    x = bn(conv2d(inputs, 32))
+    x = maxpool(x)
+
+    # cnn-2
+    x = bn(conv2d(x, 64))
+    x = maxpool(x)
+
+    # cnn-3
+    x = bn(conv2d(x, 128))
+    x = bn(conv2d(x, 128))
+    x = maxpool(x)
+
+    # cnn-4
+    x = bn(conv2d(x, 256))
+    x = bn(conv2d(x, 256))
+    x = maxpool(x)
+
+    # cnn-4
+    x = bn(conv2d(x, 256))
+    x = bn(conv2d(x, 256))
+    x = maxpool(x)
+
+    # fc-6,7,8
+    x = Reshape([7 * 7 * 256])(x)
+    x = dense(x, 1024)
+    x = dense(x, 1024)
+    x = dense(x, 256)
+
+    # softmax
+    x = softmax(x, n_classes)
+    return x
+
+
 if __name__ == "__main__":
     # 超参数
     IMG_SIZE = (224, 224)
     N_CLASSES = 105
-    BATCH_SIZE = 32
+    BATCH_SIZE = 64
     EPOCHS = 20
     train_file = "./data.train"
     dev_file = "./data.dev"
@@ -83,7 +120,7 @@ if __name__ == "__main__":
     inputs = Input(name='the_inputs', shape=(IMG_SIZE[0], IMG_SIZE[1],3), dtype='float32')
 
     # 编译模型
-    model = Model(inputs=inputs, outputs=vgg_16(inputs, N_CLASSES))
+    model = Model(inputs=inputs, outputs=vgg_11(inputs, N_CLASSES))
     model.summary()
     model.compile(optimizer='adam',loss='categorical_crossentropy',metrics=['accuracy'])
 
