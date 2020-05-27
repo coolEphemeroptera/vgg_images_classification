@@ -1,8 +1,13 @@
 from keras.layers import Input, Conv2D, BatchNormalization, MaxPooling2D, Flatten, Dense, Dropout, Reshape
+from keras.callbacks import Callback,EarlyStopping
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.utils import multi_gpu_model
 import utils
+import os
+
+# 指定GPU
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
 # base 模块
 def bn(x):
@@ -19,6 +24,7 @@ def dense(x,n_units,activation="relu"):
     return Dense(n_units,activation=activation)(x)
 
 def softmax(x,n_classes):
+    x = Dropout(0.2)(x)
     return Dense(n_classes,activation='softmax',name='the_labels')(x)
 
 # vgg_16
@@ -53,9 +59,9 @@ def vgg_16(inputs, n_classes):
 
     # fc-6,7,8
     x = Reshape([7*7*256])(x)
-    x = dense(x, 2048)
-    x = dense(x, 2048)
-    x = dense(x, 512)
+    x = dense(x, 1024)
+    x = dense(x, 1024)
+    x = dense(x, 256)
 
     # softmax
     x = softmax(x,n_classes)
@@ -95,15 +101,17 @@ def vgg_11(inputs, n_classes):
 
     # softmax
     x = softmax(x, n_classes)
-    return x
+    return x 
 
+# 提前终止
+es = EarlyStopping(verbose=1,patience=3,restore_best_weights=True)
 
 if __name__ == "__main__":
     # 超参数
     IMG_SIZE = (224, 224)
     N_CLASSES = 105
     BATCH_SIZE = 64
-    EPOCHS = 20
+    EPOCHS = 20 
     train_file = "./data.train"
     dev_file = "./data.dev"
     test_file = "./data.test"
@@ -112,22 +120,29 @@ if __name__ == "__main__":
     train_lst = utils.reading(train_file)
     dev_lst = utils.reading(dev_file)
     test_lst = utils.reading(test_file)
+    n_batchs = len(train_lst)//BATCH_SIZE
 
     dev_data,dev_labels = utils.loading(dev_lst,n_classes=N_CLASSES)
     test_data, test_labels = utils.loading(test_lst, n_classes=N_CLASSES)
     train_generator = utils.data_generator(train_lst,batch_size=BATCH_SIZE,n_classes=N_CLASSES)
 
-    # 模型 输入/输出
+    # 模型 输入
     inputs = Input(name='the_inputs', shape=(IMG_SIZE[0], IMG_SIZE[1],3), dtype='float32')
 
-    # 编译模型
-    model = Model(inputs=inputs, outputs=vgg_11(inputs, N_CLASSES))
+    # 定义模型
+    model = Model(inputs=inputs, outputs=vgg_16(inputs, N_CLASSES))
     model.summary()
-    opt = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, decay=0.001, epsilon=10e-8)
-    model.compile(optimizer=opt,loss='categorical_crossentropy',metrics=['accuracy'])
+    opt = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, decay=0.002, epsilon=10e-8)
 
-    # 训练
-    n_batchs = len(train_lst)//BATCH_SIZE
-    model.fit_generator(generator=train_generator,steps_per_epoch=n_batchs,epochs=EPOCHS,
+    # 单GPU训练
+    # model.compile(optimizer=opt,loss='categorical_crossentropy',metrics=['accuracy'])
+    # model.fit_generator(generator=train_generator,steps_per_epoch=n_batchs,epochs=EPOCHS,
+    #                     callbacks=[es],validation_data=(dev_data,dev_labels),validation_steps=n_batchs) 
+
+    # 多gpu训练
+    parallel_model = multi_gpu_model(model, gpus=2)
+    parallel_model.compile(optimizer=opt,loss='categorical_crossentropy',metrics=['accuracy'])
+    parallel_model.fit_generator(generator=train_generator,steps_per_epoch=n_batchs,epochs=EPOCHS,
                         validation_data=(dev_data,dev_labels),validation_steps=n_batchs)
+
 
